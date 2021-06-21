@@ -1,46 +1,6 @@
-/*
-* unlzexe ver 0.5 (PC-VAN UTJ44266 Kou )
-*   UNLZEXE converts the compressed file by lzexe(ver.0.90,0.91) to the
-*   UNcompressed executable one.
-*
-*   usage:  UNLZEXE packedfile[.EXE] [unpackedfile.EXE]
-
-v0.6  David Kirschbaum, Toad Hall, kirsch@usasoc.soc.mil, Jul 91
-	Problem reported by T.Salmi (ts@uwasa.fi) with UNLZEXE when run
-	with TLB-V119 on 386's.
-	Stripping out the iskanji and isjapan() stuff (which uses a somewhat
-	unusual DOS interrupt) to see if that's what's biting us.
-
---  Found it, thanks to Dan Lewis (DLEWIS@SCUACC.SCU.EDU).
-	Silly us:  didn't notice the "r.h.al=0x3800;" in isjapan().
-	Oh, you don't see it either?  INT functions are called with AH
-	having the service.  Changing to "r.x.ax=0x3800;".
-
-v0.7  Alan Modra, amodra@sirius.ucs.adelaide.edu.au, Nov 91
-    Fixed problem with large files by casting ihead components to long
-    in various expressions.
-    Fixed MinBSS & MaxBSS calculation (ohead[5], ohead[6]).  Now UNLZEXE
-    followed by LZEXE should give the original file.
-
-v0.8  Vesselin Bontchev, bontchev@fbihh.informatik.uni-hamburg.de, Aug 92
-    Fixed recognition of EXE files - both 'MZ' and 'ZM' in the header
-    are recognized.
-    Recognition of compressed files made more robust - now just
-    patching the 'LZ90' and 'LZ91' strings will not fool the program.
-
-v0.9  Stian Skjelstad, stian.skjelstad@gmail.com, Aug 2019
-    Use memmove when memory-regions overlap
-    Do not use putw/getw, since they on modern systems do not read/write 16bit
-    getc() return char, which might be signed.
-    Include POSIX headers
-    span + pointer, was expected to wrap 16bit
-*/
-
 using System;
 using System.IO;
 using System.Linq;
-using WORD = System.UInt16;
-using BYTE = System.Byte;
 using System.Runtime.InteropServices;
 
 static class Program
@@ -62,7 +22,7 @@ static class Program
         int ver;
         bool rename_sw =false;
 
-        Console.WriteLine("UNLZEXE Ver. 0.6");             /* v0.6 */
+        Console.WriteLine("UNLZEXE Ver. 0.6");
         if(argc!=2 && argc!=1){
             Console.WriteLine("usage: UNLZEXE packedfile [unpackedfile]");
             return EXIT_FAILURE;
@@ -92,7 +52,7 @@ static class Program
             ifile.Close();
             return EXIT_FAILURE;
         }
-        Console.WriteLine($"file '{ipath}' is compressed by LZEXE Ver. 0.{ver}"); /* v0.8 */
+        Console.WriteLine($"file '{ipath}' is compressed by LZEXE Ver. 0.{ver}");
         var ireader = new BinaryReader(ifile);
         var owriter = new BinaryWriter(ofile);
         if(mkreltbl(ireader, owriter, ver)!=SUCCESS) {
@@ -188,7 +148,6 @@ static class Program
     }
 
     static void parsepath(string pathname, out int fname, out int ext) {
-        /* use  int japan_f */
         int i;
 
         fname=0; ext=0;
@@ -201,13 +160,13 @@ static class Program
         }
         if(ext<=fname) ext=i;
     }
-    /*-------------------------------------------*/
-    static BYTE[] ihead_buffer = new BYTE[0x10 * sizeof(WORD)], ohead_buffer = new BYTE[0x10 * sizeof(WORD)], inf_buffer = new BYTE[8 * sizeof(WORD)];
-    static Span<WORD> ihead => MemoryMarshal.Cast<BYTE, WORD>(ihead_buffer.AsSpan());
-    static Span<WORD> ohead => MemoryMarshal.Cast<BYTE, WORD>(ohead_buffer.AsSpan());
-    static Span<WORD> inf => MemoryMarshal.Cast<BYTE, WORD>(inf_buffer.AsSpan());
+    
+    static byte[] ihead_buffer = new byte[0x10 * sizeof(ushort)], ohead_buffer = new byte[0x10 * sizeof(ushort)], inf_buffer = new byte[8 * sizeof(ushort)];
+    static Span<ushort> ihead => MemoryMarshal.Cast<byte, ushort>(ihead_buffer.AsSpan());
+    static Span<ushort> ohead => MemoryMarshal.Cast<byte, ushort>(ohead_buffer.AsSpan());
+    static Span<ushort> inf => MemoryMarshal.Cast<byte, ushort>(inf_buffer.AsSpan());
     static long loadsize;
-    static BYTE[] sig90 = {			/* v0.8 */
+    static byte[] sig90 = {
         0x06, 0x0E, 0x1F, 0x8B, 0x0E, 0x0C, 0x00, 0x8B,
         0xF1, 0x4E, 0x89, 0xF7, 0x8C, 0xDB, 0x03, 0x1E,
         0x0A, 0x00, 0x8E, 0xC3, 0xB4, 0x00, 0x31, 0xED,
@@ -267,44 +226,30 @@ static class Program
         0x8C, 0xC0, 0x01, 0xD8, 0x2D, 0x00, 0x02, 0x8E,
         0xC0, 0x89, 0xF3, 0x83, 0xE6, 0x0F, 0xD3, 0xEB,
         0x8C, 0xD8, 0x01, 0xD8, 0x8E, 0xD8, 0xE9, 0x72
-    }, sigbuf = new BYTE[sig90.Length];
+    }, sigbuf = new byte[sig90.Length];
 
     /* EXE header test (is it LZEXE file?) */
     static int rdhead(Stream ifile ,out int ver){
         long entry;
-        /* v0.8 */
-        /* v0.7 old code */
-        /*  if(fread(ihead,sizeof ihead[0],0x10,ifile)!=0x10)
-         *      return FAILURE;
-         *  memcpy(ohead,ihead,sizeof ihead[0] * 0x10);
-         *  if(ihead[0]!=0x5a4d || ihead[4]!=2 || ihead[0x0d]!=0)
-         *      return FAILURE;
-         *  if(ihead[0x0c]==0x1c && memcmp(&ihead[0x0e],"LZ09",4)==0){
-         *      *ver=90; return SUCCESS ;
-         *  }
-         *  if(ihead[0x0c]==0x1c && memcmp(&ihead[0x0e],"LZ91",4)==0){
-         *      *ver=91; return SUCCESS ;
-         *  }
-         */
         ver = 0;
-        if (ifile.Read(ihead_buffer, 0, ihead_buffer.Length) != ihead_buffer.Length)	     /* v0.8 */
-	    return FAILURE; 					     /* v0.8 */
-        Array.Copy(ihead_buffer, ohead_buffer, ohead_buffer.Length);			     /* v0.8 */
-        if((ihead [0] != 0x5a4d && ihead [0] != 0x4d5a) ||		     /* v0.8 */
-           ihead [0x0d] != 0 || ihead [0x0c] != 0x1c)		     /* v0.8 */
-	    return FAILURE; 					     /* v0.8 */
-        entry = ((long) (ihead [4] + ihead[0x0b]) << 4) + ihead[0x0a];   /* v0.8 */
+        if (ifile.Read(ihead_buffer, 0, ihead_buffer.Length) != ihead_buffer.Length)
+	    return FAILURE;
+        Array.Copy(ihead_buffer, ohead_buffer, ohead_buffer.Length);
+        if((ihead [0] != 0x5a4d && ihead [0] != 0x4d5a) ||
+           ihead [0x0d] != 0 || ihead [0x0c] != 0x1c)
+	    return FAILURE;
+        entry = ((long) (ihead [4] + ihead[0x0b]) << 4) + ihead[0x0a];
         ifile.Position = entry;
-        if (ifile.Read(sigbuf, 0, sigbuf.Length) != sigbuf.Length)    /* v0.8 */
-	    return FAILURE; 					     /* v0.8 */
-        if (Enumerable.SequenceEqual(sigbuf, sig90)) {		     /* v0.8 */
-	    ver = 90;						     /* v0.8 */
-	    return SUCCESS; 					     /* v0.8 */
-        }								     /* v0.8 */
-        if (Enumerable.SequenceEqual(sigbuf, sig91)) {		     /* v0.8 */
-	    ver = 91;						     /* v0.8 */
-	    return SUCCESS; 					     /* v0.8 */
-        }								     /* v0.8 */
+        if (ifile.Read(sigbuf, 0, sigbuf.Length) != sigbuf.Length)
+	    return FAILURE;
+        if (Enumerable.SequenceEqual(sigbuf, sig90)) {
+	    ver = 90;
+	    return SUCCESS;
+        }
+        if (Enumerable.SequenceEqual(sigbuf, sig91)) {
+	    ver = 91;
+	    return SUCCESS;
+        }
         return FAILURE;
     }
 
@@ -313,9 +258,6 @@ static class Program
         long fpos;
         int i;
 
-    /* v0.7 old code
-     *  allocsize=((ihead[1]+16-1)>>4) + ((ihead[2]-1)<<5) - ihead[4] + ihead[5];
-     */
         fpos=(long)(ihead[0x0b]+ihead[4])<<4;		/* goto CS:0000 */
         ifile.BaseStream.Position = fpos;
         ifile.Read(inf_buffer, 0, inf_buffer.Length);
@@ -341,13 +283,8 @@ static class Program
             return (FAILURE);
         }
         fpos = ofile.BaseStream.Position;
-    /* v0.7 old code
-     *  i= (int) fpos & 0x1ff;
-     *  if(i) i=0x200-i;
-     *  ohead[4]= (int) (fpos+i)>>4;
-     */
-        i= (0x200 - (int) fpos) & 0x1ff;	/* v0.7 */
-        ohead[4]= unchecked((WORD) (int)((fpos+i)>>4));	/* v0.7 */
+        i= (0x200 - (int) fpos) & 0x1ff;
+        ohead[4]= unchecked((ushort) (int)((fpos+i)>>4));
 
         for( ; i>0; i--)
             ofile.Write((byte)0);
@@ -356,19 +293,19 @@ static class Program
     /* for LZEXE ver 0.90 */
     static int reloc90(BinaryReader ifile,BinaryWriter ofile,long fpos) {
         uint c;
-        WORD rel_count=0;
-        WORD rel_seg,rel_off;
+        ushort rel_count=0;
+        ushort rel_seg,rel_off;
 
         ifile.BaseStream.Position = fpos + 0x19d;
     				    /* 0x19d=compressed relocation table address */
         rel_seg=0;
         do{
             if(ifile.BaseStream.Position >= ifile.BaseStream.Length) return FAILURE;
-            c = ifile.ReadUInt16();            /* v0.9 */
+            c = ifile.ReadUInt16();
             for(;c>0;c--) {
-                rel_off = ifile.ReadUInt16();  /* v0.9 */
-                ofile.Write(rel_off); /* v0.9 */
-                ofile.Write(rel_seg); /* v0.9 */
+                rel_off = ifile.ReadUInt16();
+                ofile.Write(rel_off);
+                ofile.Write(rel_seg);
                 rel_count++;
             }
             rel_seg += 0x1000;
@@ -378,17 +315,17 @@ static class Program
     }
     /* for LZEXE ver 0.91*/
     static int reloc91(BinaryReader ifile,BinaryWriter ofile,long fpos) {
-        WORD span;
-        WORD rel_count=0;
-        WORD rel_seg,rel_off;
+        ushort span;
+        ushort rel_count=0;
+        ushort rel_seg,rel_off;
 
         ifile.BaseStream.Position = fpos+0x158;
                                     /* 0x158=compressed relocation table address */
         rel_off=0; rel_seg=0;
         for(;;) {
             if (ifile.BaseStream.Position >= ifile.BaseStream.Length) return(FAILURE);
-            if((span=(BYTE)ifile.ReadByte())==0) { /* v0.9 */
-                span = ifile.ReadUInt16();    /* v0.9 */
+            if((span=(byte)ifile.ReadByte())==0) {
+                span = ifile.ReadUInt16();
                 if(span==0){
                     rel_seg += 0x0fff;
                     continue;
@@ -397,10 +334,10 @@ static class Program
                 }
             }
             rel_off += span;
-            rel_seg += unchecked((WORD)((rel_off & ~0x0f)>>4));
+            rel_seg += unchecked((ushort)((rel_off & ~0x0f)>>4));
             rel_off &= 0x0f;
-            ofile.Write(rel_off);   /* v0.9 */
-            ofile.Write(rel_seg);   /* v0.9 */
+            ofile.Write(rel_off);
+            ofile.Write(rel_seg);
             rel_count++;
         }
         ohead[3]=rel_count;
@@ -411,17 +348,17 @@ static class Program
     struct bitstream
     {
         public BinaryReader fp;
-        public WORD buf;
-        public BYTE count;
+        public ushort buf;
+        public byte count;
     }
 
-    static BYTE[] data = new BYTE[0x4500];
+    static byte[] data = new byte[0x4500];
 
     /*---------------------*/
     /* decompressor routine */
     static int unpack(BinaryReader ifile,BinaryWriter ofile){
         int len;
-        WORD span;
+        ushort span;
         long fpos;
         var bits = default(bitstream);
         int p = 0;
@@ -436,25 +373,25 @@ static class Program
             if(p>0x4000){
                 ofile.Write(data, 0, 0x2000);
                 p-=0x2000;
-                Array.Copy(data, 0x2000, data, 0, p);  /* v0.9 */
+                Array.Copy(data, 0x2000, data, 0, p);
                 Console.Write('.');
             }
             if(getbit(ref bits) != 0) {
-                data[p++]=(BYTE)ifile.ReadByte();            /* v0.9 */
+                data[p++]=(byte)ifile.ReadByte();
                 continue;
             }
             if(getbit(ref bits) == 0) {
                 len=getbit(ref bits) <<1;
                 len |= getbit(ref bits);
                 len += 2;
-                span=unchecked((ushort)((BYTE)ifile.ReadByte() | 0xff00));   /* v0.9 */
+                span=unchecked((ushort)((byte)ifile.ReadByte() | 0xff00));
             } else {
-                span=(BYTE)ifile.ReadByte();
-                len=(BYTE)ifile.ReadByte();             /* v0.9 */
+                span=(byte)ifile.ReadByte();
+                len=(byte)ifile.ReadByte();
                 span = unchecked((ushort)(span | ((len & ~0x07)<<5) | 0xe000));
                 len = (len & 0x07)+2;
                 if (len==2) {
-                    len=(BYTE)ifile.ReadByte();         /* v0.9 */
+                    len=(byte)ifile.ReadByte();
 
                     if(len==0)
                         break;    /* end mark of compreesed load module */
@@ -466,7 +403,7 @@ static class Program
                 }
             }
             for( ;len>0;len--,p++){
-                data[p]=data[p+unchecked((short)span)];             /* v0.9 */
+                data[p]=data[p+unchecked((short)span)];
             }
         }
         if(p!=0)
@@ -479,14 +416,14 @@ static class Program
     /* write EXE header*/
     static void wrhead(BinaryWriter ofile) {
         if(ihead[6]!=0) {
-            ohead[5]-= unchecked((ushort)(inf[5] + ((inf[6]+16-1)>>4) + 9));     /* v0.7 */
+            ohead[5]-= unchecked((ushort)(inf[5] + ((inf[6]+16-1)>>4) + 9));
             if(ihead[6]!=0xffff)
                 ohead[6]-=unchecked((ushort)(ihead[5]-ohead[5]));
         }
-        ohead[1]=unchecked((ushort)(((WORD)loadsize+(ohead[4]<<4)) & 0x1ff));    /* v0.7 */
-        ohead[2]=(WORD)((loadsize+((long)ohead[4]<<4)+0x1ff) >> 9); /* v0.7 */
+        ohead[1]=unchecked((ushort)(((ushort)loadsize+(ohead[4]<<4)) & 0x1ff));
+        ohead[2]=(ushort)((loadsize+((long)ohead[4]<<4)+0x1ff) >> 9);
         ofile.BaseStream.Position = 0;
-        ofile.Write(ohead_buffer, 0, 0x0e * sizeof(WORD));
+        ofile.Write(ohead_buffer, 0, 0x0e * sizeof(ushort));
     }
 
 
@@ -496,16 +433,14 @@ static class Program
     static void initbits(ref bitstream p,BinaryReader filep){
         p.fp=filep;
         p.count=0x10;
-        p.buf = p.fp.ReadUInt16();     /* v0.9 */
-        /* Console.WriteLine($"%04x ",p.buf); */
+        p.buf = p.fp.ReadUInt16();
     }
 
     static int getbit(ref bitstream p) {
         int b;
         b = p.buf & 1;
         if(--p.count == 0){
-            p.buf = p.fp.ReadUInt16(); /* v0.9 */
-            /* Console.WriteLine($"%04x ",p.buf); */
+            p.buf = p.fp.ReadUInt16();
             p.count= 0x10;
         }else
             p.buf >>= 1;
