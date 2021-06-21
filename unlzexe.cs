@@ -16,38 +16,46 @@ static class Program
          opath,
          ofname;
 
-    static int Main(string[] argv){
+    static int Main(string[] argv)
+    {
         var argc = argv.Length;
         Stream ifile, ofile;
         int ver;
-        bool rename_sw =false;
+        bool rename_sw = false;
 
         Console.WriteLine("UNLZEXE Ver. 0.6");
-        if(argc!=2 && argc!=1){
+        if(argc != 2 && argc != 1)
+        {
             Console.WriteLine("usage: UNLZEXE packedfile [unpackedfile]");
             return EXIT_FAILURE;
         }
-        if(argc==1)
-            rename_sw=true;
-        if(fnamechk(out ipath, out opath, out ofname, argc,argv)!=SUCCESS) {
+        if(argc == 1)
+            rename_sw = true;
+        if(fnamechk(out ipath, out opath, out ofname, argc, argv) != SUCCESS)
+        {
             return EXIT_FAILURE;
         }
 
-        try{
+        try
+        {
             ifile = File.Open(ipath, FileMode.Open, FileAccess.Read);
-        }catch{
+        } catch
+        {
             Console.WriteLine($"'{ipath}' :not found");
             return EXIT_FAILURE;
         }
 
-        if(rdhead(ifile,out ver)!=SUCCESS){
+        if(rdhead(ifile, out ver) != SUCCESS)
+        {
             Console.WriteLine($"'{ipath}' is not LZEXE file.");
             ifile.Close();
             return EXIT_FAILURE;
         }
-        try{
+        try
+        {
             ofile = File.Open(opath, FileMode.Create, FileAccess.Write);
-        }catch{
+        } catch
+        {
             Console.WriteLine($"can't open '{opath}'.");
             ifile.Close();
             return EXIT_FAILURE;
@@ -55,13 +63,15 @@ static class Program
         Console.WriteLine($"file '{ipath}' is compressed by LZEXE Ver. 0.{ver}");
         var ireader = new BinaryReader(ifile);
         var owriter = new BinaryWriter(ofile);
-        if(mkreltbl(ireader, owriter, ver)!=SUCCESS) {
+        if(mkreltbl(ireader, owriter, ver) != SUCCESS)
+        {
             ifile.Close();
             ofile.Close();
             File.Delete(opath);
             return EXIT_FAILURE;
         }
-        if(unpack(ireader, owriter) !=SUCCESS) {
+        if(unpack(ireader, owriter) != SUCCESS)
+        {
             ifile.Close();
             ofile.Close();
             File.Delete(opath);
@@ -71,33 +81,37 @@ static class Program
         wrhead(owriter);
         ofile.Close();
 
-        if(fnamechg(ipath,opath,ofname,rename_sw)!=SUCCESS){
+        if(fnamechg(ipath, opath, ofname, rename_sw) != SUCCESS)
+        {
             return EXIT_FAILURE;
         }
         return 0;
     }
 
     /* file name check */
-    static int fnamechk(out string ipath,out string opath, out string ofname,
-                  int argc,string[] argv) {
-        int idx_name,idx_ext;
+    static int fnamechk(out string ipath, out string opath, out string ofname,
+                  int argc, string[] argv)
+    {
+        int idx_name, idx_ext;
 
         ipath = argv[0];
-        parsepath(ipath,out idx_name,out idx_ext);
-        if (idx_ext >= ipath.Length) ipath = ipath.Substring(0, idx_ext) + ".exe";
-        if(tmpfname.Equals(ipath+idx_name,StringComparison.OrdinalIgnoreCase)){
+        parsepath(ipath, out idx_name, out idx_ext);
+        if(idx_ext >= ipath.Length) ipath = ipath.Substring(0, idx_ext) + ".exe";
+        if(tmpfname.Equals(ipath + idx_name, StringComparison.OrdinalIgnoreCase))
+        {
             Console.WriteLine($"'{ipath}':bad filename.");
             opath = null;
             ofname = null;
             return FAILURE;
         }
-        if(argc==1)
+        if(argc == 1)
             opath = ipath;
         else
             opath = argv[1];
-        parsepath(opath,out idx_name,out idx_ext);
-        if (idx_ext >= opath.Length) opath = opath.Substring(0, idx_ext) + ".exe";
-        if (backup_ext.Equals(opath+idx_ext, StringComparison.OrdinalIgnoreCase)){
+        parsepath(opath, out idx_name, out idx_ext);
+        if(idx_ext >= opath.Length) opath = opath.Substring(0, idx_ext) + ".exe";
+        if(backup_ext.Equals(opath + idx_ext, StringComparison.OrdinalIgnoreCase))
+        {
             Console.WriteLine($"'{opath}':bad filename.");
             ofname = null;
             return FAILURE;
@@ -108,36 +122,43 @@ static class Program
     }
 
 
-    static int fnamechg(string ipath,string opath,string ofname,bool rename_sw) {
-        int idx_name,idx_ext;
+    static int fnamechg(string ipath, string opath, string ofname, bool rename_sw)
+    {
+        int idx_name, idx_ext;
         string tpath;
 
-        if(rename_sw) {
+        if(rename_sw)
+        {
             tpath = ipath;
-            parsepath(tpath,out idx_name,out idx_ext);
+            parsepath(tpath, out idx_name, out idx_ext);
             tpath = tpath.Substring(0, idx_ext) + backup_ext;
             File.Delete(tpath);
-            try{
+            try
+            {
                 File.Move(ipath, tpath);
-            }catch{
+            } catch
+            {
                 Console.WriteLine($"can't make '{tpath}'.");
                 File.Delete(opath);
                 return FAILURE;
             }
-	    Console.WriteLine($"'{ipath}' is renamed to '{tpath}'.");
+            Console.WriteLine($"'{ipath}' is renamed to '{tpath}'.");
         }
         tpath = opath;
-        parsepath(tpath,out idx_name,out idx_ext);
+        parsepath(tpath, out idx_name, out idx_ext);
         tpath = tpath.Substring(0, idx_name) + ofname;
         File.Delete(tpath);
-        try{
+        try
+        {
             File.Move(opath, tpath);
-        }catch{
-            if(rename_sw) {
+        } catch
+        {
+            if(rename_sw)
+            {
                 tpath = ipath;
-                parsepath(tpath,out idx_name,out idx_ext);
+                parsepath(tpath, out idx_name, out idx_ext);
                 tpath = tpath.Substring(0, idx_ext) + backup_ext;
-                File.Move(tpath,ipath);
+                File.Move(tpath, ipath);
             }
             Console.WriteLine($"can't make '{tpath}'.  unpacked file '{tmpfname}' is remained.");
 
@@ -147,20 +168,23 @@ static class Program
         return SUCCESS;
     }
 
-    static void parsepath(string pathname, out int fname, out int ext) {
+    static void parsepath(string pathname, out int fname, out int ext)
+    {
         int i;
 
-        fname=0; ext=0;
-        for(i=0;i < pathname.Length; i++) {
-            switch(pathname[i]) {
-            case ':' :
-            case '\\':  fname=i+1; break;
-            case '.' :  ext=i; break;
+        fname = 0; ext = 0;
+        for(i = 0; i < pathname.Length; i++)
+        {
+            switch(pathname[i])
+            {
+                case ':':
+                case '\\': fname = i + 1; break;
+                case '.': ext = i; break;
             }
         }
-        if(ext<=fname) ext=i;
+        if(ext <= fname) ext = i;
     }
-    
+
     static byte[] ihead_buffer = new byte[0x10 * sizeof(ushort)], ohead_buffer = new byte[0x10 * sizeof(ushort)], inf_buffer = new byte[8 * sizeof(ushort)];
     static Span<ushort> ihead => MemoryMarshal.Cast<byte, ushort>(ihead_buffer.AsSpan());
     static Span<ushort> ohead => MemoryMarshal.Cast<byte, ushort>(ohead_buffer.AsSpan());
@@ -229,119 +253,135 @@ static class Program
     }, sigbuf = new byte[sig90.Length];
 
     /* EXE header test (is it LZEXE file?) */
-    static int rdhead(Stream ifile ,out int ver){
+    static int rdhead(Stream ifile, out int ver)
+    {
         long entry;
         ver = 0;
-        if (ifile.Read(ihead_buffer, 0, ihead_buffer.Length) != ihead_buffer.Length)
-	    return FAILURE;
+        if(ifile.Read(ihead_buffer, 0, ihead_buffer.Length) != ihead_buffer.Length)
+            return FAILURE;
         Array.Copy(ihead_buffer, ohead_buffer, ohead_buffer.Length);
-        if((ihead [0] != 0x5a4d && ihead [0] != 0x4d5a) ||
-           ihead [0x0d] != 0 || ihead [0x0c] != 0x1c)
-	    return FAILURE;
-        entry = ((long) (ihead [4] + ihead[0x0b]) << 4) + ihead[0x0a];
+        if((ihead[0] != 0x5a4d && ihead[0] != 0x4d5a) ||
+           ihead[0x0d] != 0 || ihead[0x0c] != 0x1c)
+            return FAILURE;
+        entry = ((long)(ihead[4] + ihead[0x0b]) << 4) + ihead[0x0a];
         ifile.Position = entry;
-        if (ifile.Read(sigbuf, 0, sigbuf.Length) != sigbuf.Length)
-	    return FAILURE;
-        if (Enumerable.SequenceEqual(sigbuf, sig90)) {
-	    ver = 90;
-	    return SUCCESS;
+        if(ifile.Read(sigbuf, 0, sigbuf.Length) != sigbuf.Length)
+            return FAILURE;
+        if(Enumerable.SequenceEqual(sigbuf, sig90))
+        {
+            ver = 90;
+            return SUCCESS;
         }
-        if (Enumerable.SequenceEqual(sigbuf, sig91)) {
-	    ver = 91;
-	    return SUCCESS;
+        if(Enumerable.SequenceEqual(sigbuf, sig91))
+        {
+            ver = 91;
+            return SUCCESS;
         }
         return FAILURE;
     }
 
     /* make relocation table */
-    static int mkreltbl(BinaryReader ifile,BinaryWriter ofile,int ver) {
+    static int mkreltbl(BinaryReader ifile, BinaryWriter ofile, int ver)
+    {
         long fpos;
         int i;
 
-        fpos=(long)(ihead[0x0b]+ihead[4])<<4;		/* goto CS:0000 */
+        fpos = (long)(ihead[0x0b] + ihead[4]) << 4;		/* goto CS:0000 */
         ifile.BaseStream.Position = fpos;
         ifile.Read(inf_buffer, 0, inf_buffer.Length);
-        ohead[0x0a]=inf[0]; 	/* IP */
-        ohead[0x0b]=inf[1]; 	/* CS */
-        ohead[0x08]=inf[2]; 	/* SP */
-        ohead[0x07]=inf[3]; 	/* SS */
+        ohead[0x0a] = inf[0]; 	/* IP */
+        ohead[0x0b] = inf[1]; 	/* CS */
+        ohead[0x08] = inf[2]; 	/* SP */
+        ohead[0x07] = inf[3]; 	/* SS */
         /* inf[4]:size of compressed load module (PARAGRAPH)*/
         /* inf[5]:increase of load module size (PARAGRAPH)*/
         /* inf[6]:size of decompressor with  compressed relocation table (BYTE) */
         /* inf[7]:check sum of decompresser with compressd relocation table(Ver.0.90) */
-        ohead[0x0c]=0x1c;		/* start position of relocation table */
+        ohead[0x0c] = 0x1c;		/* start position of relocation table */
         ofile.BaseStream.Position = 0x1cL;
-        switch(ver){
-        case 90: i=reloc90(ifile,ofile,fpos);
-                 break;
-        case 91: i=reloc91(ifile,ofile,fpos);
-                 break;
-        default: i=FAILURE; break;
+        switch(ver)
+        {
+            case 90:
+                i = reloc90(ifile, ofile, fpos);
+                break;
+            case 91:
+                i = reloc91(ifile, ofile, fpos);
+                break;
+            default: i = FAILURE; break;
         }
-        if(i!=SUCCESS){
+        if(i != SUCCESS)
+        {
             Console.WriteLine("error at relocation table.");
             return (FAILURE);
         }
         fpos = ofile.BaseStream.Position;
-        i= (0x200 - (int) fpos) & 0x1ff;
-        ohead[4]= unchecked((ushort) (int)((fpos+i)>>4));
+        i = (0x200 - (int)fpos) & 0x1ff;
+        ohead[4] = unchecked((ushort)(int)((fpos + i) >> 4));
 
-        for( ; i>0; i--)
+        for(; i > 0; i--)
             ofile.Write((byte)0);
         return SUCCESS;
     }
     /* for LZEXE ver 0.90 */
-    static int reloc90(BinaryReader ifile,BinaryWriter ofile,long fpos) {
+    static int reloc90(BinaryReader ifile, BinaryWriter ofile, long fpos)
+    {
         uint c;
-        ushort rel_count=0;
-        ushort rel_seg,rel_off;
+        ushort rel_count = 0;
+        ushort rel_seg, rel_off;
 
         ifile.BaseStream.Position = fpos + 0x19d;
-    				    /* 0x19d=compressed relocation table address */
-        rel_seg=0;
-        do{
+        /* 0x19d=compressed relocation table address */
+        rel_seg = 0;
+        do
+        {
             if(ifile.BaseStream.Position >= ifile.BaseStream.Length) return FAILURE;
             c = ifile.ReadUInt16();
-            for(;c>0;c--) {
+            for(; c > 0; c--)
+            {
                 rel_off = ifile.ReadUInt16();
                 ofile.Write(rel_off);
                 ofile.Write(rel_seg);
                 rel_count++;
             }
             rel_seg += 0x1000;
-        } while(rel_seg!=0);
-        ohead[3]=rel_count;
-        return(SUCCESS);
+        } while(rel_seg != 0);
+        ohead[3] = rel_count;
+        return (SUCCESS);
     }
     /* for LZEXE ver 0.91*/
-    static int reloc91(BinaryReader ifile,BinaryWriter ofile,long fpos) {
+    static int reloc91(BinaryReader ifile, BinaryWriter ofile, long fpos)
+    {
         ushort span;
-        ushort rel_count=0;
-        ushort rel_seg,rel_off;
+        ushort rel_count = 0;
+        ushort rel_seg, rel_off;
 
-        ifile.BaseStream.Position = fpos+0x158;
-                                    /* 0x158=compressed relocation table address */
-        rel_off=0; rel_seg=0;
-        for(;;) {
-            if (ifile.BaseStream.Position >= ifile.BaseStream.Length) return(FAILURE);
-            if((span=(byte)ifile.ReadByte())==0) {
+        ifile.BaseStream.Position = fpos + 0x158;
+        /* 0x158=compressed relocation table address */
+        rel_off = 0; rel_seg = 0;
+        for(; ; )
+        {
+            if(ifile.BaseStream.Position >= ifile.BaseStream.Length) return (FAILURE);
+            if((span = (byte)ifile.ReadByte()) == 0)
+            {
                 span = ifile.ReadUInt16();
-                if(span==0){
+                if(span == 0)
+                {
                     rel_seg += 0x0fff;
                     continue;
-                } else if(span==1){
+                } else if(span == 1)
+                {
                     break;
                 }
             }
             rel_off += span;
-            rel_seg += unchecked((ushort)((rel_off & ~0x0f)>>4));
+            rel_seg += unchecked((ushort)((rel_off & ~0x0f) >> 4));
             rel_off &= 0x0f;
             ofile.Write(rel_off);
             ofile.Write(rel_seg);
             rel_count++;
         }
-        ohead[3]=rel_count;
-        return(SUCCESS);
+        ohead[3] = rel_count;
+        return (SUCCESS);
     }
 
     /*---------------------*/
@@ -356,72 +396,82 @@ static class Program
 
     /*---------------------*/
     /* decompressor routine */
-    static int unpack(BinaryReader ifile,BinaryWriter ofile){
+    static int unpack(BinaryReader ifile, BinaryWriter ofile)
+    {
         int len;
         ushort span;
         long fpos;
         var bits = default(bitstream);
         int p = 0;
 
-        fpos=((long)ihead[0x0b]-(long)inf[4]+(long)ihead[4])<<4;
+        fpos = ((long)ihead[0x0b] - (long)inf[4] + (long)ihead[4]) << 4;
         ifile.BaseStream.Position = fpos;
-        fpos=(long)ohead[4]<<4;
+        fpos = (long)ohead[4] << 4;
         ofile.BaseStream.Position = fpos;
-        initbits(ref bits,ifile);
+        initbits(ref bits, ifile);
         Console.WriteLine(" unpacking. ");
-        for(;;){
-            if(p>0x4000){
+        for(; ; )
+        {
+            if(p > 0x4000)
+            {
                 ofile.Write(data, 0, 0x2000);
-                p-=0x2000;
+                p -= 0x2000;
                 Array.Copy(data, 0x2000, data, 0, p);
                 Console.Write('.');
             }
-            if(getbit(ref bits) != 0) {
-                data[p++]=(byte)ifile.ReadByte();
+            if(getbit(ref bits) != 0)
+            {
+                data[p++] = (byte)ifile.ReadByte();
                 continue;
             }
-            if(getbit(ref bits) == 0) {
-                len=getbit(ref bits) <<1;
+            if(getbit(ref bits) == 0)
+            {
+                len = getbit(ref bits) << 1;
                 len |= getbit(ref bits);
                 len += 2;
-                span=unchecked((ushort)((byte)ifile.ReadByte() | 0xff00));
-            } else {
-                span=(byte)ifile.ReadByte();
-                len=(byte)ifile.ReadByte();
-                span = unchecked((ushort)(span | ((len & ~0x07)<<5) | 0xe000));
-                len = (len & 0x07)+2;
-                if (len==2) {
-                    len=(byte)ifile.ReadByte();
+                span = unchecked((ushort)((byte)ifile.ReadByte() | 0xff00));
+            } else
+            {
+                span = (byte)ifile.ReadByte();
+                len = (byte)ifile.ReadByte();
+                span = unchecked((ushort)(span | ((len & ~0x07) << 5) | 0xe000));
+                len = (len & 0x07) + 2;
+                if(len == 2)
+                {
+                    len = (byte)ifile.ReadByte();
 
-                    if(len==0)
+                    if(len == 0)
                         break;    /* end mark of compreesed load module */
 
-                    if(len==1)
+                    if(len == 1)
                         continue; /* segment change */
                     else
                         len++;
                 }
             }
-            for( ;len>0;len--,p++){
-                data[p]=data[p+unchecked((short)span)];
+            for(; len > 0; len--, p++)
+            {
+                data[p] = data[p + unchecked((short)span)];
             }
         }
-        if(p!=0)
-            ofile.Write(data,0,p);
-        loadsize=ofile.BaseStream.Position-fpos;
+        if(p != 0)
+            ofile.Write(data, 0, p);
+        loadsize = ofile.BaseStream.Position - fpos;
         Console.WriteLine("end");
-        return(SUCCESS);
+        return (SUCCESS);
     }
 
     /* write EXE header*/
-    static void wrhead(BinaryWriter ofile) {
-        if(ihead[6]!=0) {
-            ohead[5]-= unchecked((ushort)(inf[5] + ((inf[6]+16-1)>>4) + 9));
-            if(ihead[6]!=0xffff)
-                ohead[6]-=unchecked((ushort)(ihead[5]-ohead[5]));
+    static void wrhead(BinaryWriter ofile)
+    {
+        if(ihead[6] != 0)
+        {
+            ohead[5] -= unchecked((ushort)(inf[5] + ((inf[6] + 16 - 1) >> 4) + 9));
+            if(ihead[6] != 0xffff)
+                ohead[6] -= unchecked((ushort)(ihead[5] - ohead[5]));
         }
-        ohead[1]=unchecked((ushort)(((ushort)loadsize+(ohead[4]<<4)) & 0x1ff));
-        ohead[2]=(ushort)((loadsize+((long)ohead[4]<<4)+0x1ff) >> 9);
+        ohead[1] = unchecked((ushort)(((ushort)loadsize + (ohead[4] << 4)) & 0x1ff));
+        ohead[2] = (ushort)((loadsize + ((long)ohead[4] << 4) + 0x1ff) >> 9);
         ofile.BaseStream.Position = 0;
         ofile.Write(ohead_buffer, 0, 0x0e * sizeof(ushort));
     }
@@ -430,19 +480,22 @@ static class Program
     /*-------------------------------------------*/
 
     /* get compress information bit by bit */
-    static void initbits(ref bitstream p,BinaryReader filep){
-        p.fp=filep;
-        p.count=0x10;
+    static void initbits(ref bitstream p, BinaryReader filep)
+    {
+        p.fp = filep;
+        p.count = 0x10;
         p.buf = p.fp.ReadUInt16();
     }
 
-    static int getbit(ref bitstream p) {
+    static int getbit(ref bitstream p)
+    {
         int b;
         b = p.buf & 1;
-        if(--p.count == 0){
+        if(--p.count == 0)
+        {
             p.buf = p.fp.ReadUInt16();
-            p.count= 0x10;
-        }else
+            p.count = 0x10;
+        } else
             p.buf >>= 1;
 
         return b;
